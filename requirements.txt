@@ -1,0 +1,11 @@
+# Tested with Python 3.11 (environment "lce" of the SPLADE project: torch 2.6.0+cu118, transformers 5.18.0)
+torch>=2.6.0
+transformers>=5.3          # SparseUp's remote code (modeling_splade.py) targets transformers 5.3
+tokenizers
+safetensors
+huggingface_hub            # model download; also the BEIR fallback (BeIR/<name> mirrors)
+numpy>=1.26
+scipy
+pandas
+ranx                       # optional: only used by the test suite to cross-check the metrics
+matplotlib                 # optional: only plots/concept_model_plots.py
