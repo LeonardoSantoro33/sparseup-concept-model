@@ -374,10 +374,24 @@ R@1000 of SciFact is identical, Δ = 0).
 (The MRR@10 columns are not significantly lower either, but the point estimates are all slightly negative: out of domain
 the gain seen on MS MARCO does not carry over, and the claim is "same quality", not "better".)
 
-### 5.4 `ftsparseup` vs SparseUp in domain
+### 5.4 `ftsparseup` vs SparseUp in domain (A = SparseUp, B = fine-tuned encoder alone)
 
-Dev MRR@10 differences of `ftsparseup` with respect to SparseUp: see the table of section 4.2 (97.4% … 100.6%). The
-paired tests of this block (6 runs, `--a sparseup_baseline_dev --b ftsparseup_…_best_dev`) are not reported here yet.
+Δ = B − A, [95% CI], p (permutation). For k = 8192 the file is `hyb1 … lam0.00` (same system as `ftsparseup`).
+
+| k | MRR@10 | nDCG@10 | R@1000 |
+|---|---|---|---|
+| 256 | −0.0053 [−0.0111, +0.0007], 0.087 | −0.0053 [−0.0106, +0.0002], 0.056 | −0.0049 [−0.0077, −0.0020], 0.0009 |
+| 512 | −0.0040 [−0.0093, +0.0012], 0.14 | −0.0040 [−0.0088, +0.0008], 0.099 | −0.0039 [−0.0066, −0.0013], 0.0026 |
+| 1024 | +0.0017 [−0.0040, +0.0075], 0.57 | +0.0015 [−0.0038, +0.0068], 0.58 | −0.0033 [−0.0062, −0.0004], 0.027 |
+| 2048 | **−0.0096 [−0.0156, −0.0036], 0.0019** | **−0.0107 [−0.0162, −0.0053], ≤ 0.0001** | **−0.0091 [−0.0123, −0.0059], 0.0001** |
+| 4096 | −0.0005 [−0.0040, +0.0029], 0.77 | −0.0004 [−0.0035, +0.0026], 0.78 | −0.0006 [−0.0020, +0.0008], 0.42 |
+| 8192 | +0.0021 [−0.0008, +0.0049], 0.15 | +0.0019 [−0.0005, +0.0044], 0.13 | +0.0001 [−0.0010, +0.0012], 0.90 |
+
+- At k = 8192 (and 4096) the fine-tuned encoder alone is **statistically indistinguishable** from SparseUp on all three
+  metrics: same quality, not better.
+- At k = 2048 it is significantly **worse** on every metric (the 97.4% of section 4.2 is not noise).
+- For k ≤ 1024 the MRR@10 / nDCG@10 differences are not significant, but R@1000 is significantly lower (k = 1024 only at
+  p = 0.027, not after Bonferroni): the small-k encoders lose recall.
 
 ## 6. Space (8.84M passages, raw sizes, 1 GB = 10⁹ bytes)
 
@@ -418,16 +432,4 @@ training, not an explicit sparsity penalty.
 | SparseUp (original) | 0.3674 | 0.4319 | 0.5205 | 1 (13.4 GB) |
 | `hybnoW`, k = 1024 | 0.3825 (+0.0151, +4.1%, p ≤ 0.0001) | 0.4475 (+0.0155, p ≤ 0.0001) | 0.5206 (100.0%) | 2 (19.5 GB, ×1.46) |
 | `hyb`, k = 2048 | 0.3788 (+0.0114, +3.1%, p ≤ 0.0001) | 0.4437 (+0.0117, p ≤ 0.0001) | 0.5203 (100.0%) | 2 (18.9 GB, ×1.41) |
-| `ftsparseup`, k = 8192 | 0.3695 (+0.0021, 100.6%, not significant) | 0.4339 (100.5%) | 0.5190 (99.7%) | 1 (12.7 GB, ×0.95) |
-
-Caveats to state in the paper:
-
-- **Selection of the headline systems.** λ\* and the checkpoints come from validation, but the choice of *which k to
-  put in this table* (1024 for `hybnoW`, 2048 for `hyb`, 8192 for `ftsparseup`) was made looking at dev and BEIR. The
-  significance tests of 5.1 cover all k to show the trend (significant for k ≤ 2048, not for k ≥ 4096).
-- **"Zero-shot" BEIR.** SparseUp was itself trained on a mixture that includes the training split of some BEIR
-  datasets; zero-shot refers to the Concept Model. BEIR is limited to three small datasets.
-- **One seed** per configuration; hyper-parameters tuned at 1 epoch (1 vs 2 epochs still to be run for k ≤ 1024).
-- **The gain is in domain**: out of domain the hybrids are at SparseUp's level, never above it significantly.
-- **Not reported yet:** the concept analysis of `--explain` (top tokens per concept and interventions) and the paired
-  tests of section 5.4.
+| `ftsparseup`, k = 8192 | 0.3695 (+0.0021, 100.6%, p = 0.15) | 0.4339 (100.5%) | 0.5190 (99.7%) | 1 (12.7 GB, ×0.95) |
