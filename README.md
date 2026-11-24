@@ -1,10 +1,8 @@
 # SparseUp Concept Model
 
 **Interpretable concept bottleneck on top of SparseUp (Linkup Research's open learned sparse retriever), trained
-contrastively on MS MARCO.** Same research, same protocol and same code structure as the
-[SPLADE Concept Model](https://github.com/LeonardoSantoro33/splade-concept-model), with
-[`Linkup-Platform/linkup-sparseup-embed-v1`](https://huggingface.co/Linkup-Platform/linkup-sparseup-embed-v1)
-in place of `naver/splade-cocondenser-ensembledistil`.
+contrastively on MS MARCO.** The base model is
+[`Linkup-Platform/linkup-sparseup-embed-v1`](https://huggingface.co/Linkup-Platform/linkup-sparseup-embed-v1).
 
 > Research code developed for a project on interpretable sparse retrieval. All experiments of the protocol are
 > complete (frozen, end-to-end, hybrids, BEIR, significance tests); the full tables are in
@@ -49,8 +47,7 @@ MRR@10 (random W / trained W / e2e):
 | e2e (W + encoder) | 85.4% | 90.2% | 95.0% | 93.7% | 97.6% | 99.1% |
 | Dense `g(d)` size | 4.5 GB | 9.1 GB | 18.1 GB | 36.2 GB | 72.4 GB | 144.9 GB |
 
-The percentages are almost identical to those of the SPLADE project at every k: the Concept Model does not depend on
-the base model. Training W matters only for small k (+0.035 MRR@10 at k = 256); from k = 1024 a random W is as good.
+Training W matters only for small k (+0.035 MRR@10 at k = 256); from k = 1024 a random W is as good.
 SparseUp itself is 13.4 GB.
 
 **2. Mixed with SparseUp, the fine-tuned model beats SparseUp in domain, at the same BEIR quality.**
@@ -72,19 +69,18 @@ Caveats (see the end of `RESULTS.md`): the choice of the headline k per variant 
 and the checkpoints come from validation); one seed per configuration; BEIR is limited to three datasets and SparseUp
 itself saw the training split of some BEIR datasets.
 
-## What is different from the SPLADE project
+## SparseUp specifics
 
-| | SPLADE Concept Model | SparseUp Concept Model |
-|---|---|---|
-| Encoder | BERT, 30,522 WordPiece dims | ModernBERT, 50,370 BPE dims, folded to 34,023 |
-| Pre-encoded MS MARCO | provided (Seismic format) | **created by `02b`** with the official implementation, same six files |
-| Pooling | `log(1+ReLU(max logits))` | top-k on logits, one `amax` over positions and fold groups, then `log(1+ReLU(x−15))` |
-| Prefixes | none | `[Q] ` / `[D] ` (attended, not pooled) |
-| Search lengths | query 256 / doc 256 | query 128 / doc 512 (SparseUp's official ones) |
-| Training lengths (e2e) | 64 / 256 | 64 / 256 (unchanged) |
-| Document size | ~120 non-zero entries, 8.5 GB | ~190 non-zero entries, 13.4 GB |
-| Hyper-parameters, validation, negatives, λ grid, tests | — | identical protocol (the grids are re-run: the winners differ) |
-| Env variables | `WORK_DIR`, `FM_DIR` | `SPARSEUP_WORK_DIR`, `SPARSEUP_FM_DIR` (the old ones are ignored) |
+| | SparseUp Concept Model |
+|---|---|
+| Encoder | ModernBERT, 50,370 BPE dims, folded to 34,023 |
+| Pre-encoded MS MARCO | **created by `02b`** with the official implementation (six files: documents, queries, ids, token mapping, groundtruth) |
+| Pooling | top-k on logits, one `amax` over positions and fold groups, then `log(1+ReLU(x−15))` |
+| Prefixes | `[Q] ` / `[D] ` (attended, not pooled) |
+| Search lengths | query 128 / doc 512 (SparseUp's official ones) |
+| Training lengths (e2e) | 64 / 256 |
+| Document size | ~190 non-zero entries, 13.4 GB |
+| Env variables | `SPARSEUP_WORK_DIR`, `SPARSEUP_FM_DIR` |
 
 ## Repository structure
 
@@ -121,7 +117,7 @@ itself saw the training split of some BEIR datasets.
 ├── docs/RESULTS.md                 # all result tables, significance tests, space
 ├── plots/                          # concept_model_plots.py and the figures (plots/figures/)
 ├── requirements.txt                # direct dependencies
-└── requirements_env.txt            # exact versions of the environment of the SPLADE project (works here too)
+└── requirements_env.txt            # exact versions of the environment used for the experiments
 ```
 
 The scripts write under `$SPARSEUP_WORK_DIR` (default `/datafast/$USER/sparseup_concept`): per-query results in
@@ -130,7 +126,7 @@ The scripts write under `$SPARSEUP_WORK_DIR` (default `/datafast/$USER/sparseup_
 ## Quickstart
 
 ```bash
-conda activate lce                         # the environment of the SPLADE project (transformers >= 5.3 needed)
+conda activate lce                         # the experiment environment (transformers >= 5.3 needed)
 pip install -r requirements.txt
 python -u src/00_smoke_test.py             # should end with: ALL TESTS PASSED (14)
 
@@ -156,7 +152,7 @@ The complete sequence, with the exact commands and the winning hyper-parameters 
   official code by `03` and against a literal re-implementation by the smoke test.
 - **Reference vectors.** The corpus and the dev queries are encoded once by the official `modeling_splade.py`
   (float32, TF32 off); everything else by our encoder, which must reproduce them (cosine 1.0000).
-- **Validation.** The same 1,000 held-out training queries as the SPLADE project (seed 42); dev only for final
+- **Validation.** 1,000 held-out training queries (seed 42); dev only for final
   evaluation. Hyper-parameters, checkpoints and λ are never chosen on dev or BEIR.
 - **Exact search.** No approximate index (the SparseUp paper uses Seismic): no approximation error to discuss.
 - **Space accounting.** Sparse index = 8 bytes per non-zero entry; dense `g(d)` = 2k bytes (fp16); 1 GB = 10⁹ bytes.

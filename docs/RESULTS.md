@@ -11,12 +11,10 @@ never on dev or BEIR; see section 7 for the choices that were *not* made on vali
 
 1. A 256–8192-dimensional concept space learned on top of SparseUp keeps most of its quality: a plain dense `g(d)` with
    k = 8192 reaches 99.0% of SparseUp on dev (frozen) and 99.1% (e2e), k = 2048 about 96% (frozen) / 94% (e2e).
-2. The result does not depend on the base model: the percentages of the frozen Concept Model are within about ±2 points
-   of those obtained with SPLADE at every k.
-3. Training W matters only for small k (+0.035 MRR@10 at k = 256). From k = 1024 on a random W is as good.
-4. Mixed with SparseUp, the fine-tuned model **beats SparseUp in domain**: `hybnoW` k = 1024 reaches dev MRR@10 0.3825
+2. Training W matters only for small k (+0.035 MRR@10 at k = 256). From k = 1024 on a random W is as good.
+3. Mixed with SparseUp, the fine-tuned model **beats SparseUp in domain**: `hybnoW` k = 1024 reaches dev MRR@10 0.3825
    (**104.1%**, p ≤ 0.0001) and `hyb` k = 2048 0.3788 (103.1%, p ≤ 0.0001), at the same BEIR quality (100.0%).
-5. At search time the fine-tuned encoder alone is as good as SparseUp (`ftsparseup`, k = 8192: 100.6% dev, 99.7% BEIR)
+4. At search time the fine-tuned encoder alone is as good as SparseUp (`ftsparseup`, k = 8192: 100.6% dev, 99.7% BEIR)
    with **0.95×** the space. W is needed only for training.
 
 ## 0. Data and baseline
@@ -32,7 +30,7 @@ never on dev or BEIR; see section 7 for the choices that were *not* made on vali
 
 | System | dev MRR@10 | dev nDCG@10 | dev R@10 | dev R@100 | dev R@1000 | DL19 nDCG@10 | DL19 R@1000 | DL20 nDCG@10 | DL20 R@1000 |
 |---|---|---|---|---|---|---|---|---|---|
-| SPLADE ensembledistil (previous project) | 0.3828 | 0.4489 | – | – | 0.9831 | 0.7308 | 0.8724 | 0.7203 | 0.8989 |
+| SPLADE ensembledistil (previous project) | 0.3828 | 0.4489 | 0.6697 | 0.9093 | 0.9831 | 0.7308 | 0.8724 | 0.7203 | 0.8989 |
 | **SparseUp** | 0.3674 | 0.4319 | 0.6492 | 0.9021 | 0.9805 | 0.6940 | 0.7954 | 0.6809 | 0.8486 |
 
 SparseUp is not distilled on MS MARCO, so it is below SPLADE ensembledistil in domain (96% on dev MRR@10); this is the
@@ -61,8 +59,7 @@ Progression of the validation MRR@10 (SparseUp = 0.3487):
 | 4096 | 0.3380 | 0.2882 | 0.3013 | **0.3534** | **101.3%** |
 | 8192 | 0.3447 | 0.2910 | 0.3051 | 0.3492 | 100.1% |
 
-With the default hyper-parameters (lr 1e-3, 10 epochs) training W is worse than leaving it random (as in the SPLADE
-project); the grid on learning rate, epochs and init-std fixes this. Grid: lr ∈ {1e-5, 3e-5, 1e-4, 3e-4, 1e-3} ×
+With the default hyper-parameters (lr 1e-3, 10 epochs) training W is worse than leaving it random; the grid on learning rate, epochs and init-std fixes this. Grid: lr ∈ {1e-5, 3e-5, 1e-4, 3e-4, 1e-3} ×
 epochs ∈ {1, 2, 5} × init-std ∈ {0.02, 1/√k}. Winners:
 
 | k | run | init-std | lr | epochs | best val |
@@ -77,8 +74,8 @@ epochs ∈ {1, 2, 5} × init-std ∈ {0.02, 1/√k}. Winners:
 For k = 2048 the winner is at the edge of the grid (lr 1e-5); lr 1e-6 gave 0.3401 < 0.3402, so it is kept.
 
 Second phase, one change at a time on each winner (validation MRR@10): `--neg-rank-min 20` and `--temperature 0.1` / `0.05`
-**never help** (e.g. k = 1024: 0.3200 → 0.3188 / 0.3184 / 0.3188; k = 4096: 0.3534 → 0.3416 / 0.3530 / 0.3524). As in
-SPLADE, the starting values (`neg-rank-min 3`, temperature 1) stay.
+**never help** (e.g. k = 1024: 0.3200 → 0.3188 / 0.3184 / 0.3188; k = 4096: 0.3534 → 0.3416 / 0.3530 / 0.3524). The
+starting values (`neg-rank-min 3`, temperature 1) stay.
 
 **Random W** (not trained, init-std = 1/√k, `lr 1e-9 --max-steps 1`): `frozen_k{256,…,8192}_rand`, validation
 0.2432, 0.3026, 0.3146, 0.3396, 0.3380, 0.3447.
@@ -134,20 +131,9 @@ Concept Model alone, score `g(q)·g(d)`; B/doc = bytes of the dense `g(d)` in fp
 | e2e | 8192 | 16384 | 0.3641 (99.1%) | 0.4280 (99.1%) | 0.9792 (99.9%) | 0.6961 (100.3%) | 0.8148 (102.4%) | 0.6775 (99.5%) | 0.8471 (99.8%) |
 
 - On dev, training W matters only for small k: +0.035 at k = 256, +0.004 at k = 512; from k = 1024 on random and trained
-  W agree within ±0.002 (as in the SPLADE project).
+  W agree within ±0.002.
 - e2e improves on frozen up to k = 1024 and is equal for larger k. The dip of e2e at k = 2048 (0.3441 < 0.3490 of
   k = 1024) is a single run with one seed and is not explained; DL19/DL20 differences of ±0.02 are noise.
-
-**Comparison with the SPLADE Concept Model** (dev MRR@10, % of each project's base model):
-
-| k | 256 | 512 | 1024 | 2048 | 4096 | 8192 |
-|---|---|---|---|---|---|---|
-| SparseUp, random W | 65.2% | 82.6% | 90.9% | 95.9% | 97.9% | 99.2% |
-| SparseUp, trained W | 74.8% | 83.6% | 90.6% | 96.0% | 97.4% | 99.0% |
-| SPLADE, random W | 66.5% | 81.7% | 90.2% | 94.9% | 96.4% | 98.2% |
-| SPLADE, trained W | 72.9% | 85.1% | 90.2% | 96.2% | 97.1% | 98.4% |
-
-At every k the percentages are almost the same: **the Concept Model does not depend on the base model.**
 
 ## 3. Out of domain: BEIR (zero-shot)
 

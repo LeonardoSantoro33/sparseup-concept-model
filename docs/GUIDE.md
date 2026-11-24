@@ -1,9 +1,7 @@
 # Step-by-step guide: how every result is produced
 
-This guide lists, in execution order, the commands of the **SparseUp Concept Model**, on the same Slurm cluster and with
-the same protocol as the SPLADE Concept Model (`splade-concept-model`). Every step of that project has its twin here;
-the only real difference is at the beginning: **nothing is pre-encoded**, so the SparseUp vectors of MS MARCO are
-produced by us (step 1.3, new script `02b`). All commands are run from the repository directory; the examples use the
+This guide lists, in execution order, the commands of the **SparseUp Concept Model** on a Slurm cluster. Nothing is
+pre-encoded: the SparseUp vectors of MS MARCO are produced by us (step 1.3, script `02b`). All commands are run from the repository directory; the examples use the
 script name only (`jobs/gpu.sbatch` looks it up in `src/`). The tables of every step are in [`RESULTS.md`](RESULTS.md),
 which also says which hyper-parameters won; the winners are written out below so that every result can be reproduced.
 
@@ -27,28 +25,25 @@ which also says which hyper-parameters won; the winners are written out below so
 cd /datafast/$USER/codice
 unzip sparseup-concept-model.zip && cd sparseup-concept-model
 mkdir -p logs                     # Slurm writes the job logs here
-conda activate lce                # the environment of the SPLADE project works as it is
+conda activate lce                # the experiment environment
 python -c "import transformers; print(transformers.__version__)"   # must be >= 5.3 (SparseUp's remote code)
 pip install -r requirements.txt   # only if something is missing
 ```
 
-**Data directories.** Paths come from environment variables with a **`SPARSEUP_` prefix**, so the `WORK_DIR` /
-`FM_DIR` of the SPLADE project (still in `~/.bashrc`) are ignored and the two projects can never mix their files.
-Defaults in `src/config.py`:
+**Data directories.** Paths come from environment variables with a **`SPARSEUP_` prefix**. Defaults in `src/config.py`:
 
 ```bash
 export SPARSEUP_WORK_DIR=/datafast/$USER/sparseup_concept   # this is already the default on the cluster
 export HF_HOME=/datafast/$USER/hf_cache                     # optional: keeps the 750 MB model out of the home quota
 ```
 
-- `SPARSEUP_WORK_DIR`: same layout as `splade_concept`: `beir/ cache/ embeddings/ encoder_check.json lce/ models/
-  msmarco/ negatives/ results/ runs/`, plus **`encoded/`**, the twin of the folder of pre-encoded files that was
-  provided for SPLADE (written by `02b`). **The per-query results are in `$SPARSEUP_WORK_DIR/results/`, not in the
+- `SPARSEUP_WORK_DIR`: `beir/ cache/ embeddings/ encoder_check.json lce/ models/
+  msmarco/ negatives/ results/ runs/`, plus **`encoded/`**, the folder of pre-encoded files (written by `02b`). **The per-query results are in `$SPARSEUP_WORK_DIR/results/`, not in the
   code folder.**
 - `SPARSEUP_FM_DIR`: where the pre-encoded files are; default `$SPARSEUP_WORK_DIR/encoded`. Normally not set.
 
-**Space.** SparseUp documents have ~190 non-zero entries (SPLADE ~120): `encoded/documents.bin` (13 GB) and
-`cache/docs_folded` are ~13 GB each (SPLADE: 8.5 GB). Every e2e checkpoint also leaves its re-encoded corpus
+**Space.** SparseUp documents have ~190 non-zero entries: `encoded/documents.bin` (13 GB) and
+`cache/docs_folded` are ~13 GB each. Every e2e checkpoint also leaves its re-encoded corpus
 (`embeddings/<run>_best_sparse/`, 5.5–12.7 GB). Plan ~250 GB for the whole set of experiments.
 
 **Model.** [`Linkup-Platform/linkup-sparseup-embed-v1`](https://huggingface.co/Linkup-Platform/linkup-sparseup-embed-v1)
@@ -66,13 +61,11 @@ squeue -u $USER ; tail -f logs/NAME_<jobid>.out ; scancel <jobid>
 
 The GPU is an A100 40 GB (A100 80 GB for `02b`); the memory notes below refer to 40 GB.
 
-**Naming of results.** Every evaluation writes `results/<run>_<set>.json` with per-query metrics. The names are the
-same as in the SPLADE project with `splade` → `sparseup`: `sparseup_baseline_dev.json`,
-`sparseup_baseline_beir_beir_fiqa.json`, `hyb_<e2e run>_best_lam0.80_dev.json`, `hybnoW_…`, `hyb1_…`, `ftsparseup_…`
-(was `ftsplade_…`). For `ftsparseup` on dev there is no file of its own: it is the `hyb1_…_lam0.00_dev` file (hyb1 at
+**Naming of results.** Every evaluation writes `results/<run>_<set>.json` with per-query metrics. For example: `sparseup_baseline_dev.json`,
+`sparseup_baseline_beir_beir_fiqa.json`, `hyb_<e2e run>_best_lam0.80_dev.json`, `hybnoW_…`, `hyb1_…`, `ftsparseup_…`. For `ftsparseup` on dev there is no file of its own: it is the `hyb1_…_lam0.00_dev` file (hyb1 at
 λ = 0 is the same system); on BEIR the file is `ftsparseup_<run>_best_beir_<dataset>`.
 
-### Three things that are different from SPLADE (all handled by the code)
+### Three SparseUp specifics (all handled by the code)
 
 1. **Folded vocabulary.** SparseUp outputs a vector over ModernBERT's 50,370 BPE tokens, but merges the case / `Ġ`
    variants of a word onto one canonical token (`heat`, `Heat`, `Ġheat`, `ĠHeat` → `Ġheat`), so only ~34k dimensions
@@ -82,7 +75,7 @@ same as in the SPLADE project with `splade` → `sparseup`: `sparseup_baseline_d
    to but not pooled. Every call of the encoder says `kind="query"` or `kind="document"`.
 3. **Lengths.** Every encoding used for a search (corpus, dev/DL/BEIR queries and documents, e2e re-encoding) uses
    SparseUp's official lengths, **query 128 / document 512 tokens** (`config.py`). The e2e **training batches**
-   keep the lengths of the SPLADE Concept Model (`--q-max-len 64 --d-max-len 256`). MS MARCO passages are almost
+   use `--q-max-len 64 --d-max-len 256`. MS MARCO passages are almost
    never longer than 256 tokens, so in domain this changes nothing; on BEIR it lets the baseline be the published model.
 
 ---
@@ -115,8 +108,7 @@ Same files as before: `collection.tsv` (8.8M passages), `queries.train.tsv` (808
 sbatch --time=2-00:00:00 -J enc_msmarco jobs/gpu.sbatch 02b_encode_msmarco.py
 ```
 
-In the SPLADE project the vectors were given to us. Here `02b` produces **the same six files, with the same names and
-format** in `sparseup_concept/encoded/`: `documents.bin`, `doc_ids.npy`, `queries.bin` (the 6,980 dev queries),
+`02b` produces **six files** in `sparseup_concept/encoded/`: `documents.bin`, `doc_ids.npy`, `queries.bin` (the 6,980 dev queries),
 `queries_ids.npy`, `token_to_id_mapping.json`, `groundtruth_100.tsv`. The vectors are computed with the **official**
 SparseUp implementation (`model.encode`, float32, TF32 off): they are the reference. The groundtruth (exact top-100 of
 the dev queries) is computed with `torch.sparse`, a different code path from the search of `retrieval.py`, so that
@@ -142,8 +134,7 @@ srun -p long -c 4 --mem=32G --gpus 1 -t 00:30:00 python -u src/03_check_encoder.
 
 Everything that is not in `encoded/` (training queries, DL queries, BEIR, the whole e2e variant) is encoded by
 **our** memory-efficient encoder (`sparseup_encoder.py`). Must print `GOOD: same model` with mean cosine 1.0000 on
-queries and on passages in `fp32`; the `amp` lines (bf16 backbone, used only by the e2e variant, as in the SPLADE
-project) are only informative. Saved in `encoder_check.json`.
+queries and on passages in `fp32`; the `amp` lines (bf16 backbone, used only by the e2e variant, (bf16 backbone) are only informative. Saved in `encoder_check.json`.
 
 ### 1.6 SparseUp baseline (~15 min, GPU)
 
@@ -163,7 +154,7 @@ sbatch -J enc_train jobs/gpu.sbatch 05_encode_train_queries.py
 ```
 
 The 503k training queries with a qrel (same set as before). 1,000 of them are held out for validation by script 06
-(seed 42): they are **the same 1,000 queries** as in the SPLADE project. SparseUp on those candidates:
+(seed 42): they are 1,000 fixed queries. SparseUp on those candidates:
 **validation MRR@10 = 0.3487**.
 
 ---
@@ -546,7 +537,7 @@ Fill in the dictionaries at the top of the script with the numbers of `RESULTS.m
   `scatter_reduce(amax)` over positions *and* fold groups, and only then `log(1 + ReLU(x − 15))`. Same result as the
   official code (the function is monotone), without the (B, L, 50k) activation tensor.
 - **Folded space**: `W` is k × C with C = 34,023 canonical tokens (dimensions that SparseUp can never activate are dropped).
-- **Clean validation**: the same 1,000 held-out training queries as the SPLADE project; checkpoints, hyper-parameters
+- **Clean validation**: 1,000 held-out training queries; checkpoints, hyper-parameters
   and λ are chosen on them, never on dev or BEIR. The *choice of which k to show* as headline system is not made on
   validation (declare it).
 - **False negatives**: the other known positives of the same query are masked out of the loss; the top 3 mining
